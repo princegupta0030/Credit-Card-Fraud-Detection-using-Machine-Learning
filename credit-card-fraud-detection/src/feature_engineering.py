@@ -1,5 +1,49 @@
 from imblearn.over_sampling import SMOTE
 from collections import Counter
+import numpy as np
+
+def engineer_features(df):
+    """
+    Apply mathematically justified feature engineering to the raw dataset.
+
+    Transformations:
+    1. Log Transformation of Amount (Log_Amount):
+       - Why: The 'Amount' feature is heavily right-skewed (most transactions are small,
+         a few are very large). Algorithms like Logistic Regression assume normality or
+         perform poorly with extreme outliers. np.log1p (log(1+x)) squashes large values,
+         making the distribution more bell-shaped and manageable for linear models.
+
+    2. Time-of-Day Features (Hour, Hour_Sin, Hour_Cos):
+       - Why: The 'Time' feature represents seconds elapsed since the first transaction.
+         As a continuous, ever-increasing integer, it's not predictive. However, fraud
+         often follows diurnal patterns (e.g., more fraud at night). By extracting the
+         hour of the day (Time % 86400 / 3600), we get a cyclical feature. We then apply
+         Sine and Cosine transformations to represent the cyclical nature of time (i.e.,
+         hour 23 is close to hour 0, which a linear model wouldn't understand otherwise).
+
+    Args:
+        df: Pandas DataFrame containing 'Time' and 'Amount'.
+
+    Returns:
+        df: DataFrame with new engineered features.
+    """
+    df_engineered = df.copy()
+
+    if 'Amount' in df_engineered.columns:
+        # np.log1p safely handles 0.0 amounts (log(0) is undefined)
+        df_engineered['Log_Amount'] = np.log1p(df_engineered['Amount'])
+
+    if 'Time' in df_engineered.columns:
+        # Extract hour of the day (0-23)
+        # 86400 seconds in a day, 3600 seconds in an hour
+        hour = (df_engineered['Time'] % 86400) / 3600
+        df_engineered['Hour'] = hour
+
+        # Cyclical encoding
+        df_engineered['Hour_Sin'] = np.sin(hour * (2. * np.pi / 24))
+        df_engineered['Hour_Cos'] = np.cos(hour * (2. * np.pi / 24))
+
+    return df_engineered
 
 def apply_smote(X_train, y_train, random_state=42):
     """

@@ -72,12 +72,18 @@ def save_scaler(scaler, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     joblib.dump(scaler, output_path)
 
-def preprocess_pipeline(filepath, scaler_output_path=None):
+from src.feature_engineering import engineer_features
+
+def preprocess_pipeline(filepath, scaler_output_path=None, apply_engineering=False):
     """
     Run the full preprocessing pipeline.
     """
     print("Loading data...")
     df = load_data(filepath)
+
+    if apply_engineering:
+        print("Applying feature engineering...")
+        df = engineer_features(df)
 
     print("Cleaning data...")
     df = clean_data(df)
@@ -89,10 +95,15 @@ def preprocess_pipeline(filepath, scaler_output_path=None):
     X_train, X_test, y_train, y_test = split_data(X, y)
 
     print("Scaling features...")
-    # Typically V1-V28 are already scaled by PCA, but 'Amount' definitely needs scaling.
-    # To be safe and uniform, we scale the 'Amount' column.
-    # (Applying StandardScaler to PCA components won't hurt, but just 'Amount' is more targeted).
-    cols_to_scale = ['Amount'] if 'Amount' in X_train.columns else None
+    # Typically V1-V28 are already scaled by PCA. We definitely need to scale 'Amount' and 'Log_Amount'.
+    # Cyclical hour features (Hour, Hour_Sin, Hour_Cos) don't strictly need scaling but it won't hurt.
+    # To be safe and uniform, we specify explicit features to scale if they exist.
+    possible_cols_to_scale = ['Amount', 'Log_Amount', 'Hour']
+    cols_to_scale = [col for col in possible_cols_to_scale if col in X_train.columns]
+
+    # If empty list, set to None to scale all, though we prefer targeted scaling
+    if not cols_to_scale:
+        cols_to_scale = None
 
     X_train_scaled, X_test_scaled, scaler = scale_data(X_train, X_test, cols_to_scale=cols_to_scale)
 
