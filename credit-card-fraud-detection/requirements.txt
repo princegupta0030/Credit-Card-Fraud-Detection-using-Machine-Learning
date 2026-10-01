@@ -8,3 +8,4 @@ joblib
 streamlit
 kagglehub
 tabulate
+pytest

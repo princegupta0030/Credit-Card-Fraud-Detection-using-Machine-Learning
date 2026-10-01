@@ -11,23 +11,24 @@ def load_data(filepath):
 def clean_data(df):
     """
     Clean the dataset:
+    - Drop non-predictive columns
     - Handle missing values
     - Remove duplicates
-    - Drop non-predictive columns
     """
-    # 1. Handle missing values (though we know there are none in this dataset)
+    # 1. Drop non-predictive columns FIRST
+    # 'Time' is the seconds elapsed between each transaction and the first transaction.
+    # If we drop 'Time' *after* dropping duplicates, rows that were identical except for 'Time'
+    # suddenly become duplicates! Dropping 'Time' first ensures we truly remove logically identical transactions.
+    if 'Time' in df.columns:
+        df = df.drop(columns=['Time'])
+
+    # 2. Handle missing values (though we know there are none in this dataset)
     df = df.dropna()
 
-    # 2. Handle duplicates
+    # 3. Handle duplicates
     # Removing exact duplicate rows as they don't provide new information
     # and can artificially inflate model performance if split between train/test
     df = df.drop_duplicates()
-
-    # 3. Drop non-predictive columns
-    # 'Time' is the seconds elapsed between each transaction and the first transaction.
-    # Without cyclical feature engineering, it's not directly useful as a continuous predictor.
-    if 'Time' in df.columns:
-        df = df.drop(columns=['Time'])
 
     return df
 
@@ -115,11 +116,14 @@ def preprocess_pipeline(filepath, scaler_output_path=None, apply_engineering=Fal
 
 if __name__ == "__main__":
     # Test the pipeline
-    raw_data_path = "../data/raw/creditcard.csv"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    raw_data_path = os.path.join(base_dir, "data", "raw", "creditcard.csv")
+    scaler_path = os.path.join(base_dir, "models", "scaler.pkl")
+
     if os.path.exists(raw_data_path):
         X_train, X_test, y_train, y_test = preprocess_pipeline(
             filepath=raw_data_path,
-            scaler_output_path="../models/scaler.pkl"
+            scaler_output_path=scaler_path
         )
         print("Pipeline executed successfully.")
         print(f"X_train shape: {X_train.shape}")
