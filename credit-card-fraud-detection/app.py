@@ -28,18 +28,12 @@ It is not a definitive determination of fraud and should be used alongside human
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def load_assets():
-    """
-    Load the trained model, scaler, and configuration exactly once per session
-    to avoid retraining or reloading from disk on every interaction.
-    """
     base_dir = os.path.dirname(os.path.abspath(__file__))
     models_dir = os.path.join(base_dir, 'models')
 
-    # Load configuration
     with open(os.path.join(models_dir, 'final_config.json'), 'r') as f:
         config = json.load(f)
 
-    # Load model and scaler
     model = joblib.load(os.path.join(models_dir, config['model_file']))
     scaler = joblib.load(os.path.join(models_dir, 'scaler.pkl'))
 
@@ -52,7 +46,56 @@ except Exception as e:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. UI FOR USER INPUT
+# 3. AUTO-FILL SIMULATOR (To avoid manual typing)
+# -----------------------------------------------------------------------------
+if 'amount' not in st.session_state:
+    st.session_state.amount = 100.0
+for i in range(1, 29):
+    if f'V{i}' not in st.session_state:
+        st.session_state[f'V{i}'] = 0.0
+
+def fill_fraud():
+    st.session_state.amount = 0.0
+    st.session_state.V1 = -2.3122
+    st.session_state.V2 = 1.9519
+    st.session_state.V3 = -1.6098
+    st.session_state.V4 = 3.9979
+    st.session_state.V5 = -0.5221
+    st.session_state.V6 = -1.4265
+    st.session_state.V7 = -2.5373
+    st.session_state.V8 = 1.3916
+    st.session_state.V9 = -2.7700
+    st.session_state.V10 = -2.7722
+    st.session_state.V11 = 3.2020
+    st.session_state.V12 = -2.8999
+    st.session_state.V13 = -0.5952
+    st.session_state.V14 = -4.2892
+    st.session_state.V15 = 0.3897
+    st.session_state.V16 = -1.1407
+    st.session_state.V17 = -2.8300
+    for i in range(18, 29):
+         st.session_state[f'V{i}'] = 0.0
+
+def fill_normal():
+    st.session_state.amount = 150.0
+    st.session_state.V1 = 1.2
+    st.session_state.V2 = 0.1
+    for i in range(3, 29):
+         st.session_state[f'V{i}'] = 0.0
+
+st.header("🧪 Quick Test Simulator")
+st.write("Typing 28 abstract numbers is annoying! Use these buttons to instantly auto-fill real examples from the dataset:")
+
+col_a, col_b = st.columns(2)
+with col_a:
+    st.button("🟢 Auto-Fill Legitimate Transaction", on_click=fill_normal, use_container_width=True)
+with col_b:
+    st.button("🔴 Auto-Fill Fraudulent Transaction", on_click=fill_fraud, use_container_width=True)
+
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# 4. UI FOR USER INPUT
 # -----------------------------------------------------------------------------
 st.sidebar.header("Model Information")
 st.sidebar.info(f"**Model:** {config['model_name']}")
@@ -61,59 +104,40 @@ st.sidebar.markdown(f"*{config['justification']}*")
 
 st.header("Transaction Details")
 
-# Layout for features: Amount is standard, V1-V28 are PCA transformed
 col1, col2 = st.columns([1, 2])
 
 with col1:
     st.subheader("Standard Features")
-    amount = st.number_input("Transaction Amount ($)", min_value=0.0, value=100.0, step=10.0)
-
-    # Optional: If feature engineering was used during training (Log_Amount or Hour),
-    # we would collect them here. Our base baseline drops Time, so we don't need Time.
-    # Note: Our `app.py` ensures we pass EXACTLY the columns the model expects.
-    # From our training, X_train has ['V1', 'V2', ..., 'V28', 'Amount']
+    amount = st.number_input("Transaction Amount ($)", min_value=0.0, step=10.0, key='amount')
 
 with col2:
     st.subheader("Anonymized PCA Features (V1 - V28)")
-    with st.expander("Expand to enter V1-V28 values"):
+    with st.expander("Expand to view/edit V1-V28 values"):
         pca_inputs = {}
-        # Creating a neat grid for 28 inputs
         cols = st.columns(4)
         for i in range(1, 29):
             feature_name = f"V{i}"
             with cols[(i - 1) % 4]:
-                pca_inputs[feature_name] = st.number_input(f"{feature_name}", value=0.0, format="%.4f")
+                pca_inputs[feature_name] = st.number_input(f"{feature_name}", format="%.4f", key=f"V{i}")
 
 # -----------------------------------------------------------------------------
-# 4. PREDICTION LOGIC
+# 5. PREDICTION LOGIC
 # -----------------------------------------------------------------------------
-if st.button("Evaluate Transaction", type="primary"):
+if st.button("Evaluate Transaction", type="primary", use_container_width=True):
     with st.spinner("Analyzing transaction..."):
         try:
-            # 1. Construct DataFrame in the exact order used during training
-            # The original raw data has V1-V28, then Amount, then Class
             input_dict = {f"V{i}": pca_inputs[f"V{i}"] for i in range(1, 29)}
             input_dict["Amount"] = amount
 
             df_input = pd.DataFrame([input_dict])
-
-            # 2. Apply EXACT preprocessing
-            # Our preprocessor expects 'Amount' to be scaled.
-            # We scale only the Amount column using the fitted scaler
             df_input_scaled = df_input.copy()
-
-            # Since the scaler was fitted on a subset of columns, we must ensure
-            # we pass the exact structure it expects.
-            # In our data_preprocessing.py, scaler was applied directly to a dataframe containing ONLY 'Amount'
             df_input_scaled[['Amount']] = scaler.transform(df_input[['Amount']])
 
-            # 3. Generate Predictions
             proba_fraud = model.predict_proba(df_input_scaled)[0, 1]
             threshold = config['selected_threshold']
 
             is_fraud = proba_fraud >= threshold
 
-            # 4. Display Results
             st.markdown("---")
             st.header("Evaluation Result")
 
@@ -121,9 +145,9 @@ if st.button("Evaluate Transaction", type="primary"):
 
             with res_col1:
                 if is_fraud:
-                    st.error("🚨 **Potential Fraud**")
+                    st.error("🚨 **Potential Fraud Detected**")
                 else:
-                    st.success("✅ **Likely Legitimate**")
+                    st.success("✅ **Transaction Likely Legitimate**")
 
             with res_col2:
                 st.metric(label="Calculated Probability of Fraud", value=f"{proba_fraud * 100:.2f}%")
