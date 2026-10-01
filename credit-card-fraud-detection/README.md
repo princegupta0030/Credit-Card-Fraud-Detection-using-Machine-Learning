@@ -130,13 +130,13 @@ To execute the pipeline from start to finish, run the scripts sequentially from 
 jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb
 
 # 2. Train the models
-PYTHONPATH=. python3 src/train.py
+python src/train.py
 
 # 3. Evaluate the models
-PYTHONPATH=. python3 src/evaluate.py
+python src/evaluate.py
 
 # 4. Perform threshold analysis and select final model
-PYTHONPATH=. python3 src/threshold_analysis.py
+python src/threshold_analysis.py
 ```
 
 ## 19. How to Run Streamlit
